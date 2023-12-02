@@ -167,24 +167,39 @@ function toReactCssProperties(str: string): CSSProperties {
     return css
 }
 
-type NoStyleAttrs<A> = Omit<A, "style">
-
-function withStyle<A extends HTMLAttributes<HTMLElement>>(
-    Comp: ComponentType<A>,
-    style: CSSProperties,
-): ComponentType<NoStyleAttrs<A>> {
-    return ((props: A) => <Comp {...props} style={style} />) as ComponentType<NoStyleAttrs<A>>
-}
-
 function styledComponent<A extends HTMLAttributes<HTMLElement>>(
     Comp: ComponentType<A>,
-): (strings: TemplateStringsArray) => ComponentType<NoStyleAttrs<A>> {
-    return (strings: TemplateStringsArray) => {
-        if (strings.length != 1) {
-            throw new Error("Expected exactly one string")
+): <P>(
+    strings: TemplateStringsArray,
+    ...args: Array<string | ((p: P) => string)>
+) => ComponentType<P & Omit<A, "style">> {
+    return <P,>(
+        strings: TemplateStringsArray,
+        ...args: Array<string | ((p: P) => string)>
+    ) => {
+        function getStyle(props: A & P): CSSProperties {
+            let cssStr = ""
+            for (let i = 0; i < strings.length; i++) {
+                cssStr += strings[i]
+                if (i < args.length) {
+                    const arg = args[i]
+                    if (typeof arg === "string") {
+                        cssStr += arg
+                    } else if (typeof arg === "function") {
+                        cssStr += arg(props)
+                    } else {
+                        throw new Error(`Expected string or function, got: ${arg}`)
+                    }
+                }
+            }
+            return toReactCssProperties(cssStr)
         }
-        const style = toReactCssProperties(strings[0])
-        return withStyle(Comp, style)
+        return ((props: A & P) => (
+            <Comp
+                {...props}
+                style={getStyle(props)}
+            />
+        )) as ComponentType<P & Omit<A, "style">>
     }
 }
 
