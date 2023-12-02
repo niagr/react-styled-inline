@@ -1,5 +1,5 @@
-import postcss from "https://deno.land/x/postcss@8.4.16/mod.js"
-import type { Declaration } from "https://deno.land/x/postcss@8.4.16/lib/postcss.js"
+import postcss, { CssSyntaxError } from "https://deno.land/x/postcss@8.4.16/mod.js"
+import type { Declaration, Root } from "https://deno.land/x/postcss@8.4.16/lib/postcss.js"
 
 import React, {
     type ComponentType,
@@ -139,8 +139,29 @@ const Elem: Elem = {
     webview: (props) => <webview {...props} />,
 } as const
 
-function parseCssString(css: string) {
-    return postcss.parse(css)
+function parseCssString(css: string): Root {
+    try {
+        return postcss.parse(css)
+    } catch (err) {
+        if (err instanceof CssSyntaxError) {
+            let markedCss = css
+            if (err.line && err.column) {
+                const errMarker = " ".repeat(err.column - 1) + "^"
+                const lines = css.split("\n")
+                const linesWithMarker = [
+                    ...lines.slice(0, err.line),
+                    errMarker,
+                    ...lines.slice(err.line),
+                ]
+                markedCss = linesWithMarker.join("\n")
+            }
+            throw new Error(
+                `Error parsing CSS: \`${markedCss}\` (${err.line}:${err.column})`,
+                { cause: err },
+            )
+        }
+        throw err
+    }
 }
 
 function parseDecls(decls: string): Declaration[] {
